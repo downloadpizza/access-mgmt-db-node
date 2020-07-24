@@ -37,9 +37,11 @@ type Entry = {
     // Access_Code: NoIdea // TODO: Implement stuff related to AccessCode once its used
 }
 
-type AccessLevel = 'Full'
-    | 'Basic'
-    | 'None'
+enum AccessLevel {
+    Full = 'Full',
+    Basic = 'Basic',
+    None = 'None'
+}
 
 interface OkResult {
     result: {
