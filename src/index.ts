@@ -1,43 +1,45 @@
 import {Collection, Db, MongoClient} from 'mongodb'
 
-const url = 'mongodb://localhost:27017'
-
-class Connection {
+export class Connection {
     private client: MongoClient;
     private db: Db;
     private collection: Collection<Entry>;
 
-    constructor() {
-        this.client = new MongoClient(url)
+    constructor(client: MongoClient) {
+        this.client = client;
         this.db = this.client.db("main")
         this.collection = this.db.collection("mainColl")
     }
 
-    addEntry(entry: Entry): Promise<boolean> {
+    async addEntry(entry: Entry): Promise<boolean> {
         return this.collection.insertOne(entry).then(isOk)
     }
 
-    removeEntry(rfid: string): Promise<boolean> {
+    async removeEntry(rfid: string): Promise<boolean> {
         return this.collection.deleteOne({RFID: rfid}).then(isOk)
     }
 
-    editEntry(rfid: string, patchEntry: Partial<Entry>) {
+    async editEntry(rfid: string, patchEntry: Partial<Entry>): Promise<boolean> {
         return this.collection.updateOne({RFID: rfid}, patchEntry).then(isOk)
     }
 
-    getEntry(rfid: string): Promise<Entry | null> {
+    async getEntry(rfid: string): Promise<Entry | null> {
         return this.collection.findOne({RFID: rfid})
+    }
+
+    async close(): Promise<void> {
+        return this.client.close()
     }
 }
 
-type Entry = {
-    RFID: string,
-    Name: string,
-    Access_Level: AccessLevel,
+export type Entry = {
+    rfid: string,
+    name: string,
+    accessLevel: AccessLevel,
     // Access_Code: NoIdea // TODO: Implement stuff related to AccessCode once its used
 }
 
-enum AccessLevel {
+export enum AccessLevel {
     Full = 'Full',
     Basic = 'Basic',
     None = 'None'
