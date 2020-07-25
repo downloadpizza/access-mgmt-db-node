@@ -6,6 +6,9 @@ export class Connection {
     private collection: Collection<Entry>;
 
     constructor(client: MongoClient) {
+        if(!client.isConnected()) {
+            throw Error("Client is not connected")
+        }
         this.client = client;
         this.db = this.client.db("main")
         this.collection = this.db.collection("mainColl")
@@ -16,19 +19,23 @@ export class Connection {
     }
 
     async removeEntry(rfid: string): Promise<boolean> {
-        return this.collection.deleteOne({RFID: rfid}).then(isOk)
+        return this.collection.deleteOne({rfid: rfid}).then(isOk)
     }
 
     async editEntry(rfid: string, patchEntry: Partial<Entry>): Promise<boolean> {
-        return this.collection.updateOne({RFID: rfid}, patchEntry).then(isOk)
+        return this.collection.updateOne({rfid: rfid}, { $set: patchEntry }).then(isOk)
     }
 
     async getEntry(rfid: string): Promise<Entry | null> {
-        return this.collection.findOne({RFID: rfid})
+        return this.collection.findOne({rfid: rfid})
     }
 
     async close(): Promise<void> {
         return this.client.close()
+    }
+
+    async clearCollection(): Promise<any> {
+        return this.collection.drop()
     }
 }
 
