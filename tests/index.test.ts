@@ -1,7 +1,9 @@
 import {AccessLevel, Connection, Entry} from "../src";
 import {MongoClient} from "mongodb";
+import {ChildProcess, exec} from 'child_process'
 
-const url = 'mongodb://localhost:27017'
+const port = 27010
+const url = `mongodb://localhost:${port}`
 
 const filterObject = (obj: any, fields: string[]) => Object.keys(obj)
     .filter(key => fields.includes(key))
@@ -10,36 +12,24 @@ const filterObject = (obj: any, fields: string[]) => Object.keys(obj)
         return newObj;
     }, {})
 
-expect.extend({
-    toMatchObjectByFields(received: any, expected: any, fields: string[]) {
-        const filteredReceived = filterObject(received, fields)
-        const filteredExpected = filterObject(expected, fields)
-        const equal = fields.every(field => filteredReceived[field] === filteredExpected[field])
-        if(equal) {
-            return {
-                pass: true,
-                message: () => "Expected objects to mismatch"
-            }
-        } else {
-            return {
-                pass: false,
-                message: () =>
-                    "Expected objects to match \n" +
-                    "Difference:\n\n" +
-                    `Expected: ${this.utils.printExpected(filteredExpected)}\n` +
-                    `Received: ${this.utils.printReceived(filteredReceived)}`
-            }
-        }
-    }
+let mongod: ChildProcess
+
+beforeAll(async (done) => {
+    exec("mkdir test-database")
+    mongod = exec(`mongod --dbpath test-database --port ${port}`)
+    mongod.stdout!!.on('data', chunk => {
+        chunk.match(`waiting for connections on port ${port}`) && done()
+    })
+    mongod.on('close', code => {
+        done.fail(`MongoDB exited with code ${code}`)
+    })
 })
 
-declare global {
-    namespace jest {
-        interface Matchers<R> {
-            toMatchObjectByFields(expected: any, fields: string[]): CustomMatcherResult
-        }
-    }
-}
+afterAll(async (done) => {
+    mongod.kill()
+    exec("rm -rf test-database")
+    done()
+})
 
 test('Connect to a database', async () => {
     const mongoClient = await new MongoClient(url, { useUnifiedTopology: true }).connect()
@@ -59,7 +49,7 @@ describe('test methods of connection class', () => {
     let connection: Connection
 
     beforeEach(async (done) => {
-        const client = await new MongoClient('mongodb://localhost:27017',{ useUnifiedTopology: true }).connect()
+        const client = await new MongoClient(url,{ useUnifiedTopology: true }).connect()
         connection = new Connection(client)
         entries = [
             {
@@ -93,8 +83,12 @@ describe('test methods of connection class', () => {
     test('Test get entry', async () => {
         for (const entry of entries) {
             const receivedEntry = await connection.getEntry(entry.rfid)
-            expect(receivedEntry).toMatchObjectByFields(entry, entryFields)
+            expect(receivedEntry).toMatchObject(filterObject(entry, entryFields))
         }
+    })
+
+    test('Test get entry with non-existent entry', async () => {
+        await expect(connection.getEntry("non-existent-rfid")).resolves.toBeNull()
     })
 
     test('Test remove entry', async () => {
@@ -139,7 +133,7 @@ describe('test methods of connection class', () => {
             const newEntry = entriesAfterPatch[i]
 
             await expect(connection.editEntry(rfid, patch)).resolves.toBe(true)
-            await expect(connection.getEntry(newEntry.rfid)).resolves.toMatchObjectByFields(newEntry, entryFields)
+            await expect(connection.getEntry(newEntry.rfid)).resolves.toMatchObject(filterObject(newEntry, entryFields))
         }
     })
 })
